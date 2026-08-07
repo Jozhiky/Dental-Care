@@ -5,13 +5,13 @@ import { ToothMetricsHeader } from './components/dashboard/ToothMetricsHeader';
 import { MintDenDashboard } from './components/dashboard/MintDenDashboard';
 import { PediatricOdontogram } from './components/odontogram/PediatricOdontogram';
 import { AppointmentManager } from './components/dashboard/AppointmentManager';
-import { EruptionTracker } from './components/dashboard/EruptionTracker';
 import { TreatmentPlanBuilder } from './components/dashboard/TreatmentPlanBuilder';
 import { ClinicalRecordView } from './components/clinical/ClinicalRecordView';
 import { ClinicalHistoryTimeline } from './components/clinical/ClinicalHistoryTimeline';
 import { RightPanelWidget } from './components/dashboard/RightPanelWidget';
 import { ToothMagnifierDrawer } from './components/odontogram/ToothMagnifierDrawer';
 import { CommandPalette } from './components/common/CommandPalette';
+import { DentalStudio } from './components/dental3d/DentalStudio';
 import { ToothData, ToothSurface, ClinicalConditionType, PediatricPatient } from './types/odontogram';
 
 const SAMPLE_PATIENT: PediatricPatient = {
@@ -108,6 +108,8 @@ export const App: React.FC = () => {
       }
     : null;
 
+  const isDental3DWorkspace = activeTab === 'odontogram';
+
   return (
     <SidebarLayout
       activeTab={activeTab}
@@ -115,58 +117,49 @@ export const App: React.FC = () => {
       activePatient={SAMPLE_PATIENT}
       onOpenCmd={() => setIsCmdOpen(true)}
     >
-      {/* Patient Hero Summary Card */}
-      <PatientSummaryCard patient={SAMPLE_PATIENT} />
+      {isDental3DWorkspace ? (
+        <DentalStudio />
+      ) : (
+        <>
+          <PatientSummaryCard patient={SAMPLE_PATIENT} />
+          <ToothMetricsHeader />
 
-      {/* Denty ai Top Row Tooth Metrics Header with Radial Progress Rings */}
-      <ToothMetricsHeader />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start overflow-y-auto min-h-0">
+            <div className="lg:col-span-8 space-y-3">
+              {activeTab === 'dashboard' && (
+                <div className="space-y-3">
+                  <MintDenDashboard patient={SAMPLE_PATIENT} onSelectPatient={() => {}} />
+                  <PediatricOdontogram />
+                </div>
+              )}
 
-      {/* Main Grid: Center Workspace (8 Cols) + Right Health GPT & Schedule (4 Cols) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
-        {/* Center Main View (8 Cols) */}
-        <div className="lg:col-span-8 space-y-3">
-          {activeTab === 'dashboard' && (
-            <div className="space-y-3">
-              <MintDenDashboard patient={SAMPLE_PATIENT} onSelectPatient={() => {}} />
-              <PediatricOdontogram />
+              {activeTab === 'appointments' && (
+                <div className="space-y-3">
+                  <AppointmentManager />
+                </div>
+              )}
+
+              {activeTab === 'patient' && (
+                <div className="space-y-3">
+                  <ClinicalRecordView patient={SAMPLE_PATIENT} />
+                  <TreatmentPlanBuilder />
+                </div>
+              )}
+
+              {activeTab === 'history' && (
+                <div className="space-y-3">
+                  <ClinicalHistoryTimeline />
+                </div>
+              )}
             </div>
-          )}
 
-          {activeTab === 'odontogram' && (
-            <div className="space-y-3">
-              <EruptionTracker childAge={SAMPLE_PATIENT.ageYears} />
-              <PediatricOdontogram />
-              <TreatmentPlanBuilder />
+            <div className="lg:col-span-4 space-y-3 no-print">
+              <RightPanelWidget />
             </div>
-          )}
+          </div>
+        </>
+      )}
 
-          {activeTab === 'appointments' && (
-            <div className="space-y-3">
-              <AppointmentManager />
-            </div>
-          )}
-
-          {activeTab === 'patient' && (
-            <div className="space-y-3">
-              <ClinicalRecordView patient={SAMPLE_PATIENT} />
-              <TreatmentPlanBuilder />
-            </div>
-          )}
-
-          {activeTab === 'history' && (
-            <div className="space-y-3">
-              <ClinicalHistoryTimeline />
-            </div>
-          )}
-        </div>
-
-        {/* Right Assistant Panel (4 Cols) Inspired by Denty ai / MintDen */}
-        <div className="lg:col-span-4 space-y-3 no-print">
-          <RightPanelWidget />
-        </div>
-      </div>
-
-      {/* Tooth Magnifier Drawer */}
       <ToothMagnifierDrawer
         tooth={selectedToothData}
         onClose={() => setSelectedToothNum(null)}
@@ -174,7 +167,6 @@ export const App: React.FC = () => {
         onApplyWholeTooth={handleApplyWholeToothCondition}
       />
 
-      {/* Command Palette Modal */}
       <CommandPalette
         isOpen={isCmdOpen}
         onClose={() => setIsCmdOpen(false)}
