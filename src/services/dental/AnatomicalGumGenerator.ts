@@ -33,13 +33,12 @@ export class AnatomicalGumGenerator {
       const baseX = t * config.halfWidth;
       const baseZ = -config.depth * t * t + config.frontOffsetZ;
 
-      // Local tangent of the X/Z parabola.
       const tangentX = config.halfWidth;
       const tangentZ = -2 * config.depth * t;
       const tangentLength = Math.max(Math.hypot(tangentX, tangentZ), 1e-6);
 
-      // Normal chosen so positive offset points toward the facial/buccal side:
-      // forward at the incisors and progressively lateral in the posterior.
+      // Positive offset points to the facial/buccal side: forward at the
+      // incisors and progressively lateral toward the posterior segments.
       const normalX = -tangentZ / tangentLength;
       const normalZ = tangentX / tangentLength;
 
@@ -78,15 +77,16 @@ export class AnatomicalGumGenerator {
     ridge.receiveShadow = true;
     ridgeGroup.add(ridge);
 
-    // TubeGeometry has flat open ends. Small spheres make the posterior ends
-    // visually rounded so lateral views do not show sharp pink cut-planes.
-    const capGeometry = new THREE.SphereGeometry(radius, 16, 10);
-    const firstCap = new THREE.Mesh(capGeometry, material);
+    // TubeGeometry has flat open ends. Small spherical caps avoid the sharp
+    // pink cut-planes that were obvious in lateral views.
+    const firstCapGeometry = new THREE.SphereGeometry(radius, 16, 10);
+    const firstCap = new THREE.Mesh(firstCapGeometry, material);
     firstCap.name = `${name}_Cap_Start`;
     firstCap.position.copy(points[0]);
     firstCap.castShadow = true;
 
-    const lastCap = new THREE.Mesh(capGeometry.clone(), material);
+    const lastCapGeometry = new THREE.SphereGeometry(radius, 16, 10);
+    const lastCap = new THREE.Mesh(lastCapGeometry, material);
     lastCap.name = `${name}_Cap_End`;
     lastCap.position.copy(points[points.length - 1]);
     lastCap.castShadow = true;
@@ -99,9 +99,12 @@ export class AnatomicalGumGenerator {
     name: string,
     config: GumArchConfig,
     material: THREE.Material,
-  ): THREE.Group {
-    const archGroup = new THREE.Group();
-    archGroup.name = name;
+  ): THREE.Mesh {
+    // Keep Mesh as the public container type for backwards compatibility with
+    // DentalViewer3D. The parent geometry is intentionally empty; all visible
+    // gingiva lives in the child facial/lingual ridges.
+    const archMesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+    archMesh.name = name;
 
     const facialOffset = Math.max(config.radius * 1.55, 0.42);
     const lingualOffset = -Math.max(config.radius * 1.10, 0.30);
@@ -120,7 +123,7 @@ export class AnatomicalGumGenerator {
     const facialRadius = Math.max(config.radius * 0.54, 0.16);
     const lingualRadius = Math.max(config.radius * 0.38, 0.11);
 
-    archGroup.add(
+    archMesh.add(
       AnatomicalGumGenerator.createRoundedRidge(
         `${name}_Facial`,
         facialPoints,
@@ -135,13 +138,13 @@ export class AnatomicalGumGenerator {
       ),
     );
 
-    return archGroup;
+    return archMesh;
   }
 
   public static createGums(
     upperConfig: GumArchConfig,
     lowerConfig: GumArchConfig,
-  ): { upperGum: THREE.Group; lowerGum: THREE.Group } {
+  ): { upperGum: THREE.Mesh; lowerGum: THREE.Mesh } {
     const upperMaterial = new THREE.MeshStandardMaterial({
       color: 0xce7c88,
       roughness: 0.72,
