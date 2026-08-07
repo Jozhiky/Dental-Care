@@ -1,0 +1,159 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    /* Brand Teal Official Colors */
+    --color-brand-primary: #1A7B82;
+    --color-brand-primary-dark: #0F766E;
+    --color-brand-secondary: #788A96;
+    --color-brand-secondary-dark: #64748B;
+    --color-brand-accent: #E6F4F1;
+    --color-canvas-bg: #F0F4F8; /* Soft pale canvas tint from reference images */
+
+    /* Typography */
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-heading: 'Outfit', 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-canvas-bg);
+    color: #0F172A;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: #0F172A;
+    letter-spacing: -0.015em;
+  }
+}
+
+/* Denty ai / MintDen Ultra-Smooth Cards */
+.futuristic-card {
+  background-color: #FFFFFF;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.625rem; /* 26px rounded corners */
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.03), 0 0 20px rgba(26, 123, 130, 0.02);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.futuristic-card:hover {
+  box-shadow: 0 15px 35px -5px rgba(15, 23, 42, 0.06);
+  border-color: #CBD5E1;
+}
+
+/* MintDen Slim Icon Sidebar */
+.slim-sidebar {
+  background-color: #FFFFFF;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 1.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.03);
+}
+
+.slim-icon-btn {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748B;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.slim-icon-btn:hover {
+  background-color: #F1F5F9;
+  color: #0F172A;
+  transform: scale(1.05);
+}
+
+.slim-icon-btn.active {
+  background-color: #1A7B82;
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(26, 123, 130, 0.4);
+}
+
+/* Denty Toolbar Buttons */
+.denty-tool-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.875rem;
+  border-radius: 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  border: 1px solid #E2E8F0;
+  background-color: #FFFFFF;
+  transition: all 0.15s ease;
+}
+
+.denty-tool-btn:hover {
+  border-color: #1A7B82;
+  color: #1A7B82;
+  background-color: #E6F4F1;
+}
+
+/* Floating Diagnostic Pins */
+.diag-pin {
+  background: #FFFFFF;
+  border: 1.5px solid #1A7B82;
+  padding: 0.25rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: all 0.15s ease;
+}
+
+.diag-pin:hover {
+  transform: scale(1.08);
+}
+
+/* Quadrants */
+.deciduous-quadrant {
+  background-color: #FFFBEB;
+  border: 2px solid #F59E0B;
+  border-radius: 1.25rem;
+}
+
+.permanent-quadrant {
+  background-color: #F0FDF4;
+  border: 2px solid #1A7B82;
+  border-radius: 1.25rem;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
