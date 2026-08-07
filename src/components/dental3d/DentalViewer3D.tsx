@@ -41,6 +41,23 @@ const LOWER_PROGRESSIVE_ORDER = [
   '45', '35', '46', '36', '47', '37', '48', '38',
 ];
 
+const ARCH_CONFIG = {
+  upper: {
+    halfWidth: 6.0,
+    depth: 2.65,
+    cervicalY: 1.02,
+    frontOffsetZ: 0.08,
+    scale: 0.82,
+  },
+  lower: {
+    halfWidth: 5.7,
+    depth: 2.45,
+    cervicalY: -0.98,
+    frontOffsetZ: 0,
+    scale: 0.80,
+  },
+} as const;
+
 function toAnatomicalType(tooth: ToothDefinition): AnatomicalToothType {
   if (tooth.category === 'incisor_central') return 'incisor_central';
   if (tooth.category === 'incisor_lateral') return 'incisor_lateral';
@@ -76,14 +93,19 @@ function addToothToArch(model: THREE.Group, tooth: ToothDefinition) {
 
   if (archIndex < 0) return;
 
+  const config = isLower ? ARCH_CONFIG.lower : ARCH_CONFIG.upper;
   const t = archIndex / (archOrder.length - 1) * 2 - 1;
-  const angle = t * 1.12;
-  const halfWidth = isLower ? 3.15 : 3.35;
-  const depth = isLower ? 2.05 : 2.20;
 
-  const x = Math.sin(angle) * halfWidth;
-  const z = -(1 - Math.cos(angle)) * depth;
-  const y = isLower ? -0.62 : 0.62;
+  // Parabolic dental arch. Linear X spacing avoids the severe crowding that
+  // occurred with sin(angle), while Z curvature keeps posterior teeth behind
+  // the anterior segment in a natural U-shaped arch.
+  const x = t * config.halfWidth;
+  const z = -config.depth * t * t + config.frontOffsetZ;
+
+  // Small Curve of Spee: posterior cervical margins sit slightly farther from
+  // the occlusal plane while anterior teeth remain close to the reference Y.
+  const posteriorRise = 0.08 * Math.pow(Math.abs(t), 1.6);
+  const y = config.cervicalY + (isLower ? -posteriorRise : posteriorRise);
 
   const toothGroup = AnatomicalToothGenerator.createTooth(
     toAnatomicalType(tooth),
@@ -98,10 +120,17 @@ function addToothToArch(model: THREE.Group, tooth: ToothDefinition) {
   };
 
   toothGroup.position.set(x, y, z);
-  toothGroup.rotation.y = -angle;
+  toothGroup.scale.setScalar(config.scale);
 
-  // The generator is naturally oriented like a mandibular tooth:
-  // crown +Y, root -Y. Upper teeth must point their crowns downward.
+  // Orient each piece approximately perpendicular to the local tangent of the
+  // parabola. This keeps incisors facing forward and progressively rotates
+  // canines/premolars/molars toward the posterior segments.
+  const tangentDz = -2 * config.depth * t;
+  toothGroup.rotation.y = Math.atan2(tangentDz, config.halfWidth);
+
+  // The procedural generator is naturally mandibular: crown +Y, root -Y.
+  // Maxillary pieces are inverted so both arches point their crowns toward the
+  // occlusal plane, with roots pointing away from it.
   if (!isLower) {
     toothGroup.rotation.z = Math.PI;
   }
@@ -137,7 +166,7 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
     controls.enableDamping = true;
     controls.dampingFactor = 0.06;
     controls.minDistance = 2;
-    controls.maxDistance = 30;
+    controls.maxDistance = 40;
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.25));
 
@@ -181,7 +210,7 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
 
     const maxDim = Math.max(size.x, size.y, size.z, 1);
     const fov = THREE.MathUtils.degToRad(camera.fov);
-    const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.35;
+    const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.25;
 
     const setCameraPreset = (preset: CameraPreset) => {
       camera.up.set(0, 1, 0);
@@ -207,8 +236,8 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
         case 'reset':
         default:
           camera.position.set(
-            center.x + distance * 0.42,
-            center.y + distance * 0.24,
+            center.x + distance * 0.38,
+            center.y + distance * 0.22,
             center.z + distance * 0.92,
           );
           break;
@@ -222,7 +251,8 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
 
     setCameraPreset(activeCameraPreset);
 
-    const grid = new THREE.GridHelper(12, 24, 0x38bdf8, 0x334155);
+    const gridSize = Math.max(14, Math.ceil(size.x + 4));
+    const grid = new THREE.GridHelper(gridSize, gridSize * 2, 0x38bdf8, 0x334155);
     grid.position.y = Number.isFinite(box.min.y) ? box.min.y - 0.25 : -2.5;
     scene.add(grid);
 
@@ -231,6 +261,11 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
       renderedTeeth: model.children.length,
       boundsFinite: boxIsFinite,
       cameraPreset: activeCameraPreset,
+      bounds: {
+        width: Number(size.x.toFixed(2)),
+        height: Number(size.y.toFixed(2)),
+        depth: Number(size.z.toFixed(2)),
+      },
     });
 
     let animationFrame = 0;
