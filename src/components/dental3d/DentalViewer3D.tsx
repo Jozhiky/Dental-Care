@@ -6,6 +6,7 @@ import {
   AnatomicalToothGenerator,
   AnatomicalToothType,
 } from '../../services/dental/AnatomicalToothGenerator';
+import { AnatomicalGumGenerator } from '../../services/dental/AnatomicalGumGenerator';
 import { ToothDefinition } from '../../types/dental';
 
 export type CameraPreset =
@@ -45,16 +46,22 @@ const ARCH_CONFIG = {
   upper: {
     halfWidth: 6.0,
     depth: 2.65,
-    cervicalY: 1.02,
     frontOffsetZ: 0.08,
     scale: 0.82,
+    occlusalY: 0.055,
+    gumCenterY: 1.00,
+    gumPosteriorY: 0.83,
+    gumRadius: 0.34,
   },
   lower: {
     halfWidth: 5.7,
     depth: 2.45,
-    cervicalY: -0.98,
     frontOffsetZ: 0,
     scale: 0.80,
+    occlusalY: -0.055,
+    gumCenterY: -0.90,
+    gumPosteriorY: -0.81,
+    gumRadius: 0.33,
   },
 } as const;
 
@@ -72,6 +79,27 @@ function toAnatomicalType(tooth: ToothDefinition): AnatomicalToothType {
   return 'molar_3';
 }
 
+function crownHeightForType(type: AnatomicalToothType, isLower: boolean): number {
+  switch (type) {
+    case 'incisor_central':
+      return isLower ? 1.05 : 1.15;
+    case 'incisor_lateral':
+      return isLower ? 1.00 : 1.05;
+    case 'canine':
+      return 1.25;
+    case 'premolar_1':
+      return 0.98;
+    case 'premolar_2':
+      return 0.96;
+    case 'molar_1':
+      return 0.94;
+    case 'molar_2':
+      return 0.90;
+    case 'molar_3':
+      return 0.85;
+  }
+}
+
 function selectedTeethForCount(teethCount: number): ToothDefinition[] {
   const byFdi = new Map(INITIAL_32_TEETH.map((tooth) => [tooth.fdiCode, tooth]));
 
@@ -86,7 +114,7 @@ function selectedTeethForCount(teethCount: number): ToothDefinition[] {
     .filter((tooth): tooth is ToothDefinition => Boolean(tooth));
 }
 
-function addToothToArch(model: THREE.Group, tooth: ToothDefinition) {
+function addToothToArch(archGroup: THREE.Group, tooth: ToothDefinition) {
   const isLower = tooth.arch === 'lower';
   const archOrder = isLower ? LOWER_ARCH_ORDER : UPPER_ARCH_ORDER;
   const archIndex = archOrder.indexOf(tooth.fdiCode);
@@ -95,22 +123,21 @@ function addToothToArch(model: THREE.Group, tooth: ToothDefinition) {
 
   const config = isLower ? ARCH_CONFIG.lower : ARCH_CONFIG.upper;
   const t = archIndex / (archOrder.length - 1) * 2 - 1;
+  const type = toAnatomicalType(tooth);
 
-  // Parabolic dental arch. Linear X spacing avoids the severe crowding that
-  // occurred with sin(angle), while Z curvature keeps posterior teeth behind
-  // the anterior segment in a natural U-shaped arch.
   const x = t * config.halfWidth;
   const z = -config.depth * t * t + config.frontOffsetZ;
 
-  // Small Curve of Spee: posterior cervical margins sit slightly farther from
-  // the occlusal plane while anterior teeth remain close to the reference Y.
-  const posteriorRise = 0.08 * Math.pow(Math.abs(t), 1.6);
-  const y = config.cervicalY + (isLower ? -posteriorRise : posteriorRise);
+  // Place crowns against a shared occlusal reference instead of aligning every
+  // cervical margin to one Y value. This keeps short molars and tall canines in
+  // a much more believable upper/lower relationship.
+  const crownHeight = crownHeightForType(type, isLower) * config.scale;
+  const posteriorCurve = 0.035 * Math.pow(Math.abs(t), 1.6);
+  const y = isLower
+    ? config.occlusalY - crownHeight - posteriorCurve
+    : config.occlusalY + crownHeight + posteriorCurve;
 
-  const toothGroup = AnatomicalToothGenerator.createTooth(
-    toAnatomicalType(tooth),
-    isLower,
-  );
+  const toothGroup = AnatomicalToothGenerator.createTooth(type, isLower);
 
   toothGroup.name = `Tooth_${tooth.fdiCode}`;
   toothGroup.userData = {
@@ -119,23 +146,33 @@ function addToothToArch(model: THREE.Group, tooth: ToothDefinition) {
     arch: tooth.arch,
   };
 
+  // Keep roots in the scene graph for a future X-Ray/root toggle, but do not
+  // expose them in the normal odontogram view. Clinically the gingiva should
+  // cover this region, and the previous screenshots were dominated by roots.
+  toothGroup.traverse((object) => {
+    if (object instanceof THREE.Mesh && object.name.startsWith('Root')) {
+      object.visible = false;
+    }
+  });
+
   toothGroup.position.set(x, y, z);
   toothGroup.scale.setScalar(config.scale);
 
-  // Orient each piece approximately perpendicular to the local tangent of the
-  // parabola. This keeps incisors facing forward and progressively rotates
-  // canines/premolars/molars toward the posterior segments.
   const tangentDz = -2 * config.depth * t;
   toothGroup.rotation.y = Math.atan2(tangentDz, config.halfWidth);
 
-  // The procedural generator is naturally mandibular: crown +Y, root -Y.
-  // Maxillary pieces are inverted so both arches point their crowns toward the
-  // occlusal plane, with roots pointing away from it.
   if (!isLower) {
     toothGroup.rotation.z = Math.PI;
   }
 
-  model.add(toothGroup);
+  archGroup.add(toothGroup);
+}
+
+function finiteBox(box: THREE.Box3): boolean {
+  return [
+    box.min.x, box.min.y, box.min.z,
+    box.max.x, box.max.y, box.max.z,
+  ].every(Number.isFinite) && !box.isEmpty();
 }
 
 export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
@@ -170,49 +207,130 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
 
     scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.25));
 
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.0);
     keyLight.position.set(4, 6, 8);
     keyLight.castShadow = true;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xdbeafe, 1.25);
+    const fillLight = new THREE.DirectionalLight(0xdbeafe, 1.15);
     fillLight.position.set(-5, 2, 5);
     scene.add(fillLight);
 
-    const rimLight = new THREE.DirectionalLight(0xffffff, 0.9);
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.8);
     rimLight.position.set(0, 4, -5);
     scene.add(rimLight);
 
     const model = new THREE.Group();
     model.name = 'GauntletDentalModel';
 
-    selectedTeethForCount(teethCount).forEach((tooth) => {
-      addToothToArch(model, tooth);
+    const upperAssembly = new THREE.Group();
+    upperAssembly.name = 'UpperAssembly';
+    const lowerAssembly = new THREE.Group();
+    lowerAssembly.name = 'LowerAssembly';
+
+    const upperArch = new THREE.Group();
+    upperArch.name = 'UpperDentalArch';
+    const lowerArch = new THREE.Group();
+    lowerArch.name = 'LowerDentalArch';
+
+    upperAssembly.add(upperArch);
+    lowerAssembly.add(lowerArch);
+    model.add(upperAssembly, lowerAssembly);
+
+    const selectedTeeth = selectedTeethForCount(teethCount);
+    selectedTeeth.forEach((tooth) => {
+      addToothToArch(tooth.arch === 'lower' ? lowerArch : upperArch, tooth);
     });
 
-    scene.add(model);
+    let upperGum: THREE.Mesh | null = null;
+    let lowerGum: THREE.Mesh | null = null;
 
-    model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(model);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+    // Only show gingiva once the full 32-piece base has passed the progressive
+    // render test. Smaller counts remain clean diagnostic views.
+    if (teethCount >= 32) {
+      const gums = AnatomicalGumGenerator.createGums(
+        {
+          halfWidth: ARCH_CONFIG.upper.halfWidth,
+          depth: ARCH_CONFIG.upper.depth,
+          frontOffsetZ: ARCH_CONFIG.upper.frontOffsetZ,
+          cervicalYCenter: ARCH_CONFIG.upper.gumCenterY,
+          cervicalYPosterior: ARCH_CONFIG.upper.gumPosteriorY,
+          radius: ARCH_CONFIG.upper.gumRadius,
+        },
+        {
+          halfWidth: ARCH_CONFIG.lower.halfWidth,
+          depth: ARCH_CONFIG.lower.depth,
+          frontOffsetZ: ARCH_CONFIG.lower.frontOffsetZ,
+          cervicalYCenter: ARCH_CONFIG.lower.gumCenterY,
+          cervicalYPosterior: ARCH_CONFIG.lower.gumPosteriorY,
+          radius: ARCH_CONFIG.lower.gumRadius,
+        },
+      );
 
-    const boxIsFinite = [
-      box.min.x, box.min.y, box.min.z,
-      box.max.x, box.max.y, box.max.z,
-    ].every(Number.isFinite);
-
-    if (!boxIsFinite || box.isEmpty()) {
-      console.error('[DentalViewer3D] Invalid model bounds', { box, teethCount });
-      center.set(0, 0, 0);
-      size.set(4, 4, 4);
+      upperGum = gums.upperGum;
+      lowerGum = gums.lowerGum;
+      upperAssembly.add(upperGum);
+      lowerAssembly.add(lowerGum);
     }
 
-    const maxDim = Math.max(size.x, size.y, size.z, 1);
-    const fov = THREE.MathUtils.degToRad(camera.fov);
-    const distance = (maxDim / (2 * Math.tan(fov / 2))) * 1.25;
+    scene.add(model);
+    model.updateMatrixWorld(true);
+
+    const fullBox = new THREE.Box3().setFromObject(model);
+    const fullBoxFinite = finiteBox(fullBox);
+
+    const gridSize = fullBoxFinite
+      ? Math.max(14, Math.ceil(fullBox.getSize(new THREE.Vector3()).x + 4))
+      : 16;
+    const grid = new THREE.GridHelper(gridSize, gridSize * 2, 0x38bdf8, 0x334155);
+    grid.position.y = fullBoxFinite ? fullBox.min.y - 0.35 : -2.5;
+    scene.add(grid);
+
+    const cameraDistanceFor = (box: THREE.Box3, preset: CameraPreset) => {
+      const size = box.getSize(new THREE.Vector3());
+      const verticalFov = THREE.MathUtils.degToRad(camera.fov);
+      const tanHalfFov = Math.tan(verticalFov / 2);
+
+      let screenWidth = size.x;
+      let screenHeight = size.y;
+      let depthAxis = size.z;
+
+      if (preset === 'superior' || preset === 'inferior') {
+        screenWidth = size.x;
+        screenHeight = size.z;
+        depthAxis = size.y;
+      } else if (preset === 'lateral_left' || preset === 'lateral_right') {
+        screenWidth = size.z;
+        screenHeight = size.y;
+        depthAxis = size.x;
+      }
+
+      const distanceForHeight = screenHeight / (2 * tanHalfFov);
+      const distanceForWidth = screenWidth / (2 * tanHalfFov * Math.max(camera.aspect, 0.1));
+
+      return Math.max(distanceForHeight, distanceForWidth, 1) * 1.12 + depthAxis * 0.38;
+    };
 
     const setCameraPreset = (preset: CameraPreset) => {
+      upperAssembly.visible = true;
+      lowerAssembly.visible = true;
+
+      let focusObject: THREE.Object3D = model;
+
+      if (preset === 'superior') {
+        lowerAssembly.visible = false;
+        focusObject = upperAssembly;
+      } else if (preset === 'inferior') {
+        upperAssembly.visible = false;
+        focusObject = lowerAssembly;
+      }
+
+      focusObject.updateMatrixWorld(true);
+      const focusBox = new THREE.Box3().setFromObject(focusObject);
+      const safeBox = finiteBox(focusBox) ? focusBox : fullBox;
+      const center = safeBox.getCenter(new THREE.Vector3());
+      const distance = cameraDistanceFor(safeBox, preset);
+
       camera.up.set(0, 1, 0);
 
       switch (preset) {
@@ -236,9 +354,9 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
         case 'reset':
         default:
           camera.position.set(
-            center.x + distance * 0.38,
-            center.y + distance * 0.22,
-            center.z + distance * 0.92,
+            center.x + distance * 0.42,
+            center.y + distance * 0.26,
+            center.z + distance * 0.88,
           );
           break;
       }
@@ -251,21 +369,15 @@ export const DentalViewer3D: React.FC<DentalViewer3DProps> = ({
 
     setCameraPreset(activeCameraPreset);
 
-    const gridSize = Math.max(14, Math.ceil(size.x + 4));
-    const grid = new THREE.GridHelper(gridSize, gridSize * 2, 0x38bdf8, 0x334155);
-    grid.position.y = Number.isFinite(box.min.y) ? box.min.y - 0.25 : -2.5;
-    scene.add(grid);
-
     console.info('[DentalViewer3D] Gauntlet render', {
       requestedTeeth: teethCount,
-      renderedTeeth: model.children.length,
-      boundsFinite: boxIsFinite,
+      renderedTeeth: selectedTeeth.length,
+      upperRendered: upperArch.children.length,
+      lowerRendered: lowerArch.children.length,
+      gumsVisible: teethCount >= 32,
+      rootsVisible: false,
+      boundsFinite: fullBoxFinite,
       cameraPreset: activeCameraPreset,
-      bounds: {
-        width: Number(size.x.toFixed(2)),
-        height: Number(size.y.toFixed(2)),
-        depth: Number(size.z.toFixed(2)),
-      },
     });
 
     let animationFrame = 0;
