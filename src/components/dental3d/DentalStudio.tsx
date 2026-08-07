@@ -105,7 +105,7 @@ export const DentalStudio: React.FC = () => {
               Geometría & Anatomía Dental 3D
             </h3>
             <p className="text-[11px] text-slate-500 mt-1 font-medium">
-              Etapa de estabilización: primero verificamos 1 → 4 → 8 → 16 → 32 piezas sin errores de geometría.
+              Etapa de estabilización: verificamos 1 → 4 → 8 → 16 → 32 piezas antes de añadir interacciones clínicas.
             </p>
           </div>
 
@@ -125,7 +125,7 @@ export const DentalStudio: React.FC = () => {
                 <li><strong>Caninos:</strong> cúspide y raíz larga.</li>
                 <li><strong>Premolares:</strong> primer y segundo premolar diferenciados.</li>
                 <li><strong>Molares:</strong> primer, segundo y tercer molar diferenciados.</li>
-                <li><strong>Encías:</strong> se reintroducirán después de validar las 32 piezas.</li>
+                <li><strong>Encías:</strong> visibles con 32 piezas; raíces ocultas en la vista clínica normal.</li>
               </ul>
             </div>
           </div>
