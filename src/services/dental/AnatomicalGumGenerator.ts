@@ -1,78 +1,90 @@
 import * as THREE from 'three';
 
+export interface GumArchConfig {
+  halfWidth: number;
+  depth: number;
+  frontOffsetZ: number;
+  cervicalYCenter: number;
+  cervicalYPosterior: number;
+  radius: number;
+}
+
 /**
- * Anatomical Scalloped Gum Generator V2.7
- * Verified 100% NaN-Free geometry computation for UpperGum & LowerGum.
+ * Anatomical gingival ridge used by the generic 3D odontogram.
+ *
+ * The gum follows exactly the same parabolic X/Z path used by the teeth. It is
+ * intentionally a compact gingival ridge instead of a large solid pink mass,
+ * so the crowns remain readable while the cervical/root area is visually
+ * covered. Roots stay available in the tooth groups for future X-Ray modes.
  */
 export class AnatomicalGumGenerator {
+  private static createArchGum(
+    name: string,
+    config: GumArchConfig,
+    material: THREE.Material,
+  ): THREE.Mesh {
+    const points: THREE.Vector3[] = [];
+    const steps = 72;
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps * 2 - 1;
+      const posteriorFactor = Math.pow(Math.abs(t), 1.45);
+
+      const x = t * config.halfWidth;
+      const z = -config.depth * t * t + config.frontOffsetZ;
+      const y = THREE.MathUtils.lerp(
+        config.cervicalYCenter,
+        config.cervicalYPosterior,
+        posteriorFactor,
+      );
+
+      points.push(new THREE.Vector3(x, y, z));
+    }
+
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+    const geometry = new THREE.TubeGeometry(
+      curve,
+      120,
+      config.radius,
+      18,
+      false,
+    );
+
+    geometry.computeVertexNormals();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    return mesh;
+  }
+
   public static createGums(
-    upperWidth: number = 1.90,
-    upperDepth: number = 1.40,
-    lowerWidth: number = 1.82,
-    lowerDepth: number = 1.34,
-    overbite: number = 0.16,
-    overjet: number = 0.14
+    upperConfig: GumArchConfig,
+    lowerConfig: GumArchConfig,
   ): { upperGum: THREE.Mesh; lowerGum: THREE.Mesh } {
     const gumMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd86c76,
-      roughness: 0.55,
-      metalness: 0.02,
+      color: 0xce7c88,
+      roughness: 0.68,
+      metalness: 0.0,
     });
 
-    const numSteps = 48;
-    const arcSpan = Math.PI * 0.78;
+    const upperGum = AnatomicalGumGenerator.createArchGum(
+      'UpperGum',
+      upperConfig,
+      gumMaterial.clone(),
+    );
 
-    // 1. UPPER SCALLOPED GINGIVAL MARGIN
-    const upperPoints: THREE.Vector3[] = [];
-    for (let i = 0; i <= numSteps; i++) {
-      const tNorm = i / numSteps - 0.5;
-      const angle = tNorm * arcSpan;
+    const lowerGum = AnatomicalGumGenerator.createArchGum(
+      'LowerGum',
+      lowerConfig,
+      gumMaterial.clone(),
+    );
 
-      const radiusOffset = 0.05 + 0.02 * Math.sin(i * 0.8);
-      const x = Math.sin(angle) * (upperWidth + radiusOffset);
-      const z = -(1 - Math.cos(angle)) * (upperDepth + radiusOffset);
-      const scallopY = 0.15 + 0.06 * Math.cos(i * 1.0);
-
-      upperPoints.push(new THREE.Vector3(x, scallopY, z));
-    }
-
-    const upperCurve = new THREE.CatmullRomCurve3(upperPoints);
-    const upperGumGeo = new THREE.TubeGeometry(upperCurve, 64, 0.28, 12, false);
-    upperGumGeo.computeVertexNormals();
-    upperGumGeo.computeBoundingBox();
-    upperGumGeo.computeBoundingSphere();
-
-    const upperGum = new THREE.Mesh(upperGumGeo, gumMaterial.clone());
-    upperGum.name = 'UpperGum';
-    upperGum.position.y = 0.22;
-    upperGum.castShadow = true;
-    upperGum.receiveShadow = true;
-
-    // 2. LOWER SCALLOPED GINGIVAL MARGIN
-    const lowerPoints: THREE.Vector3[] = [];
-    for (let i = 0; i <= numSteps; i++) {
-      const tNorm = i / numSteps - 0.5;
-      const angle = tNorm * arcSpan;
-
-      const radiusOffset = 0.05 + 0.02 * Math.sin(i * 0.8);
-      const x = Math.sin(angle) * (lowerWidth + radiusOffset);
-      const z = -(1 - Math.cos(angle)) * (lowerDepth + radiusOffset) + overjet;
-      const scallopY = -1.35 - overbite - 0.15 - 0.06 * Math.cos(i * 1.0);
-
-      lowerPoints.push(new THREE.Vector3(x, scallopY, z));
-    }
-
-    const lowerCurve = new THREE.CatmullRomCurve3(lowerPoints);
-    const lowerGumGeo = new THREE.TubeGeometry(lowerCurve, 64, 0.28, 12, false);
-    lowerGumGeo.computeVertexNormals();
-    lowerGumGeo.computeBoundingBox();
-    lowerGumGeo.computeBoundingSphere();
-
-    const lowerGum = new THREE.Mesh(lowerGumGeo, gumMaterial.clone());
-    lowerGum.name = 'LowerGum';
-    lowerGum.position.y = -0.22;
-    lowerGum.castShadow = true;
-    lowerGum.receiveShadow = true;
+    gumMaterial.dispose();
 
     return { upperGum, lowerGum };
   }
