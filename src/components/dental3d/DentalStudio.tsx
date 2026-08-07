@@ -3,24 +3,19 @@ import { DentalViewer3D, CameraPreset } from './DentalViewer3D';
 import { Box, Layers, Camera } from 'lucide-react';
 
 export const DentalStudio: React.FC = () => {
-  // Progressive Teeth Count State (1, 4, 8, 16, 32)
   const [teethCount, setTeethCount] = useState<number>(32);
-
-  // Active Camera Preset State
-  const [cameraPreset, setCameraPreset] = useState<CameraPreset>('reset');
+  const [cameraPreset, setCameraPreset] = useState<CameraPreset>('frontal');
 
   return (
-    <div className="w-full h-[calc(100vh-5.5rem)] min-h-0 overflow-hidden flex flex-col gap-3">
-      {/* Studio Header Banner (Fixed height) */}
+    <div className="w-full h-full min-h-0 overflow-hidden flex flex-col gap-3">
       <div className="h-12 shrink-0 clean-card px-4 bg-white border-l-4 border-l-[#1A7B82] flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Box className="w-4 h-4 text-[#1A7B82]" />
           <h2 className="text-xs font-black text-slate-900 font-outfit uppercase tracking-wider">
-            Dentadura 3D Anatómica Base (32 Piezas & Encías)
+            Dentadura 3D Anatómica Base — Gauntlet de Render
           </h2>
         </div>
 
-        {/* Progressive Verification Buttons (1, 4, 8, 16, 32 Teeth) */}
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] font-bold text-slate-400 mr-1">Prueba Progresiva:</span>
           {[1, 4, 8, 16, 32].map((num) => (
@@ -39,11 +34,8 @@ export const DentalStudio: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Viewport Container: Grid (Viewer 1fr | Sidebar 340px) */}
       <div className="flex-1 min-h-0 w-full grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-3 overflow-hidden">
-        {/* LEFT COLUMN: 3D VIEWPORT (Strictly Viewport Bound, zero page scroll) */}
         <div className="relative w-full h-full min-h-0 overflow-hidden flex flex-col">
-          {/* Top Overlaid Camera Preset Buttons */}
           <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-1 bg-slate-900/90 backdrop-blur-md p-1.5 rounded-xl border border-slate-700 shadow-md">
             <button
               onClick={() => setCameraPreset('frontal')}
@@ -106,7 +98,6 @@ export const DentalStudio: React.FC = () => {
           <DentalViewer3D teethCount={teethCount} activeCameraPreset={cameraPreset} />
         </div>
 
-        {/* RIGHT COLUMN: SIDE PANEL (Scrollable inside panel ONLY) */}
         <div className="w-full h-full min-h-0 overflow-y-auto clean-card p-4 space-y-4 bg-white border border-slate-200/90 rounded-2xl">
           <div className="border-b border-slate-100 pb-3">
             <h3 className="text-xs font-black text-slate-900 font-outfit uppercase tracking-wider flex items-center gap-2">
@@ -114,35 +105,35 @@ export const DentalStudio: React.FC = () => {
               Geometría & Anatomía Dental 3D
             </h3>
             <p className="text-[11px] text-slate-500 mt-1 font-medium">
-              Piezas dentales diferenciadas por morfología (incisivos, caninos, premolares y molares).
+              Etapa de estabilización: primero verificamos 1 → 4 → 8 → 16 → 32 piezas sin errores de geometría.
             </p>
           </div>
 
           <div className="space-y-2 text-xs">
             <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between font-bold">
-              <span className="text-slate-600">Piezas Activas:</span>
+              <span className="text-slate-600">Piezas solicitadas:</span>
               <span className="text-[#1A7B82] font-black">{teethCount} Dientes</span>
             </div>
 
             <div className="p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 space-y-1.5">
               <div className="font-extrabold text-[11px] flex items-center gap-1.5">
                 <Camera className="w-3.5 h-3.5 text-emerald-700" />
-                Diferenciación Anatómica 3D Activa
+                Generador Anatómico Activo
               </div>
               <ul className="text-[10px] text-emerald-800 space-y-1 font-medium list-disc pl-3">
-                <li><strong>Incisivos:</strong> Corona rectangular, borde incisal y 1 raíz.</li>
-                <li><strong>Caninos:</strong> Cúspide cónica prominente y 1 raíz larga.</li>
-                <li><strong>Premolares:</strong> Bicúspides oclusales y 1–2 raíces.</li>
-                <li><strong>Molares:</strong> Anchos, 4 cúspides oclusales y 2–3 raíces.</li>
-                <li><strong>Encías:</strong> UpperGum y LowerGum envolventes.</li>
+                <li><strong>Incisivos:</strong> centrales y laterales diferenciados.</li>
+                <li><strong>Caninos:</strong> cúspide y raíz larga.</li>
+                <li><strong>Premolares:</strong> primer y segundo premolar diferenciados.</li>
+                <li><strong>Molares:</strong> primer, segundo y tercer molar diferenciados.</li>
+                <li><strong>Encías:</strong> se reintroducirán después de validar las 32 piezas.</li>
               </ul>
             </div>
           </div>
 
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 text-[11px]">
-            <span className="font-bold text-slate-800 block">💡 Cámaras Rápidas:</span>
+            <span className="font-bold text-slate-800 block">💡 Validación:</span>
             <p className="text-slate-600 font-medium leading-relaxed">
-              Usa los botones superiores ([Vista Frontal], [Vista Superior], [Vista Inferior], [Lateral]) para verificar la dentadura desde todos los ángulos anatómicos.
+              Cambia la cantidad de piezas y las cámaras. La consola debe mostrar boundsFinite: true y la cantidad renderizada debe coincidir con la solicitada.
             </p>
           </div>
         </div>
