@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import shutil
 import tempfile
@@ -12,15 +13,42 @@ import trimesh
 
 
 def load_with_meshlab(eoff_path: Path) -> trimesh.Trimesh:
-    with tempfile.TemporaryDirectory(prefix="eoff_meshlab_") as tmp:
-        tmp_off = Path(tmp) / (eoff_path.stem + ".off")
+    """Load an Exocad EOFF by presenting it to MeshLab as an OFF file.
+
+    On Windows, PyMeshLab may keep the temporary OFF file open briefly after
+    vertex/face matrices are copied. TemporaryDirectory then raises WinError 32
+    during cleanup even though the mesh import itself succeeded. We therefore
+    manage the temp directory manually, explicitly release MeshLab objects,
+    force Python finalizers, and treat a still-locked temp directory as cleanup
+    noise rather than a conversion failure.
+    """
+    tmp_dir = Path(tempfile.mkdtemp(prefix="eoff_meshlab_"))
+    tmp_off = tmp_dir / (eoff_path.stem + ".off")
+
+    ms = None
+    mesh = None
+    try:
         shutil.copy2(eoff_path, tmp_off)
 
         ms = pymeshlab.MeshSet()
         ms.load_new_mesh(str(tmp_off))
         mesh = ms.current_mesh()
-        vertices = np.asarray(mesh.vertex_matrix(), dtype=np.float64)
-        faces = np.asarray(mesh.face_matrix(), dtype=np.int64)
+
+        # Copy data out of PyMeshLab-owned memory before releasing its objects.
+        vertices = np.array(mesh.vertex_matrix(), dtype=np.float64, copy=True)
+        faces = np.array(mesh.face_matrix(), dtype=np.int64, copy=True)
+    finally:
+        # Release possible native file handles before attempting cleanup.
+        mesh = None
+        ms = None
+        gc.collect()
+        try:
+            shutil.rmtree(tmp_dir)
+        except (PermissionError, OSError):
+            # Windows/PyMeshLab can keep a short-lived native handle open.
+            # The imported matrices are already detached, so this must not make
+            # an otherwise valid tooth conversion fail the Gauntlet.
+            pass
 
     if vertices.ndim != 2 or vertices.shape[1] != 3 or len(vertices) < 3:
         raise RuntimeError(f"invalid vertex matrix shape {vertices.shape}")
@@ -105,9 +133,6 @@ def main() -> int:
             failures.append({"file": str(path), "error": str(exc)})
             print(f"FAIL={path}:{exc}")
 
-    # Re-assert the directory immediately before every final artifact write.
-    # This avoids failures if the output folder was removed externally while
-    # the 16 source meshes were being processed (for example by cleanup/sync tools).
     output, ply_dir = ensure_output_dirs(output)
 
     glb_path = output / "meshlab_templates_preview.glb"
