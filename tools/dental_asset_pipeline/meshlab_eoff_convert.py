@@ -31,8 +31,21 @@ def load_with_meshlab(eoff_path: Path) -> trimesh.Trimesh:
     if faces.min() < 0 or faces.max() >= len(vertices):
         raise RuntimeError("face index out of range")
 
-    tm = trimesh.Trimesh(vertices=vertices, faces=faces, process=False, validate=False)
-    return tm
+    return trimesh.Trimesh(vertices=vertices, faces=faces, process=False, validate=False)
+
+
+def ensure_output_dirs(output: Path) -> tuple[Path, Path]:
+    output = output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    ply_dir = output / "ply"
+    ply_dir.mkdir(parents=True, exist_ok=True)
+
+    if not output.is_dir():
+        raise RuntimeError(f"Output path is not a directory: {output}")
+    if not ply_dir.is_dir():
+        raise RuntimeError(f"PLY output path is not a directory: {ply_dir}")
+
+    return output, ply_dir
 
 
 def main() -> int:
@@ -41,11 +54,12 @@ def main() -> int:
     ap.add_argument("--output", type=Path, default=Path("output/meshlab-eoff"))
     args = ap.parse_args()
 
-    source = args.input_dir
-    output = args.output
-    output.mkdir(parents=True, exist_ok=True)
-    ply_dir = output / "ply"
-    ply_dir.mkdir(parents=True, exist_ok=True)
+    source = args.input_dir.resolve()
+    output, ply_dir = ensure_output_dirs(args.output)
+
+    print(f"SOURCE_DIR={source}")
+    print(f"OUTPUT_DIR={output}")
+    print(f"OUTPUT_EXISTS={output.exists()}")
 
     files = sorted(source.rglob("*.eoff"), key=lambda p: (p.parent.name.lower(), int(p.stem) if p.stem.isdigit() else 999, p.name))
     print(f"EOFF_FILES={len(files)}")
@@ -91,6 +105,11 @@ def main() -> int:
             failures.append({"file": str(path), "error": str(exc)})
             print(f"FAIL={path}:{exc}")
 
+    # Re-assert the directory immediately before every final artifact write.
+    # This avoids failures if the output folder was removed externally while
+    # the 16 source meshes were being processed (for example by cleanup/sync tools).
+    output, ply_dir = ensure_output_dirs(output)
+
     glb_path = output / "meshlab_templates_preview.glb"
     if report:
         glb_path.write_bytes(scene.export(file_type="glb"))
@@ -103,7 +122,11 @@ def main() -> int:
         "meshes": report,
         "preview_glb": str(glb_path),
     }
-    (output / "manifest.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    manifest_path = output / "manifest.json"
+    manifest_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"MANIFEST={manifest_path}")
+    print(f"MANIFEST_EXISTS={manifest_path.exists()}")
 
     all_finite = bool(report) and all(x["finite"] for x in report)
     sane_components = bool(report) and all(x["components"] <= 8 for x in report)
