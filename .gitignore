@@ -12,6 +12,25 @@ dist
 dist-ssr
 *.local
 
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Large medical datasets and generated dental assets
+# Keep source CBCT/NIfTI/MHA files out of Git.
+data/toothfairy*/
+datasets/
+*.nii
+*.nii.gz
+*.mha
+*.mhd
+*.raw
+
+# Local output produced by the dental asset pipeline
+artifacts/dental-generated/
+tools/dental_asset_pipeline/output/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
